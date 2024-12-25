@@ -1,0 +1,832 @@
+---
+title: "Venta de autos en EE.UU."
+date: "26/FEB/2024"
+author: 
+  - name: "Camilo Campillo <camilocampillo07@gmail.com>"
+    avatar: ./logo/avatar.jpeg
+    title: Ing. Industrial
+output:
+  readthedown::readthedown:
+    highlight: kate
+    toc_depth: 3
+    css:
+    - https://use.fontawesome.com/releases/v5.15.4/css/all.css
+    - style.css
+---
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(
+  cache = FALSE,
+  echo = TRUE
+)
+```
+
+## **Autor**
+
+**Nombre:** Camilo A. Campillo Martínez
+
+## **Motivación**
+En este análisis, voy a sumergirme de lleno en mi conjunto de datos para explorarlo a fondo. Quiero descubrir todo lo que tiene para ofrecer y aprovechar al máximo la información disponible. Para lograrlo, utilizaré algunas herramientas poderosas, como **`dplyr`** para limpiar los datos y **`ggplot2`** para crear visualizaciones atractivas. Con estas herramientas a mi disposición, estoy preparado para explorar los datos, identificar patrones interesantes y obtener conclusiones útiles.
+
+## **Fuente**
+El dataset que voy a usar es extradido de: 
+[Car Sales Report](https://www.kaggle.com/datasets/missionjee/car-sales-report)
+
+La información es ficticia y solo es usada para fines educacionales.
+
+## **Import**
+El siguiente código muestra la carga de las librerías necesarias para el 
+análisis. 
+
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+library(rmdformats)
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(ggplot2)
+library(highcharter)
+library(readxl)
+library(janitor)
+library(scales)
+library(DescTools)
+library(gridExtra)
+library(lubridate)
+```
+
+## **Dataset**
+```{r warning=FALSE, message=FALSE, echo=TRUE}
+car_sales <- read.csv("car_sales.csv")
+head(car_sales,10)
+```
+
+## **Análisis Exploratorio inicial**
+```{r, message=FALSE, echo=TRUE, warning=FALSE, paged.print=FALSE}
+#Dimensiones
+dim(car_sales)
+
+#Faltantes
+colSums(is.na(car_sales))
+
+#Duplicados
+sum(duplicated(car_sales))
+
+#Variables
+glimpse(car_sales)
+
+#Valores únicos
+valores_unicos <- sapply(car_sales, 
+                     function(x) length(unique(x)))
+data.frame(valores_unicos)
+```
+
+En la vista preliminar, podemos ver que existen **23'906** registros de vehículos vendidos. El dataset no presenta valores faltantes ni valores duplicados.
+
+El resumen de variables podemos ver que tenemos:
+
+- **Date:** Fecha de la compra 
+- **Customer.Name:** Nombre del comprador
+- **Gender:** Género del comprador
+- **Annual.Income:** Ingresos Anuales del comprador
+- **Dealer_Name:** Nombre del comercio donde se realizó la compra
+- **Company:** Compañia que produce el vehículo
+- **Model:**  Modelo del vehículo
+- **Engine:** Tipo de motor que tiene
+- **Transmission:** Tipo de trasmisión
+- **Color:** Color del vehículo     
+- **Price:** Precio del Vehículo
+- **Dealer_No:** Número del comercio
+- **Body.Style:** Tipo de vehículo
+- **Phone:** Teléfono 
+- **Dealer_Region:** Región del establecimiento del negocio
+
+AL momento de analizar las variables por valores únicos encontramos que 
+los compradores son identificados en **2** distintos géneros, que hay **28** concesionarias, **30** compañia de vehículos, **154** modelos diferentes en total, **2** tipo de motores al igual que **2** tipos de trasnmisiones en los vehículos, **3** colores, **5** estilos diferentes de carrocerías y que estas concesionarias están en **7** diferentes regiones.
+
+## **Limpieza**
+Primero miro cuales son las variables del dataset, e identifico que para fines
+de análisis no necesito **3** variables, las cuales son **Car_id**,
+**Dealer_No** y **Phone**. Es por ello que decido eliminarlas del dataset y seguir con la respectiva limpieza.
+
+```{r warning=FALSE, message=FALSE, echo=TRUE}
+#Nombres de las variables
+names(car_sales)
+
+#Eliminación de columnas
+car_sales <- select(car_sales, - Car_id, - Dealer_No, - Phone)
+
+#Renombrar columnas
+car_sales <- car_sales %>%
+  janitor::clean_names()
+names(car_sales)
+
+#Reescribir la variable 
+car_sales <- car_sales %>%
+  separate(engine, c("engine_1", "engine_2"), sep = "")
+
+car_sales <- car_sales %>%
+  mutate(engine_2 = case_when(
+    engine_2 == "D" ~ "Double Overhead Camshaft",
+    engine_2 == "O" ~ "Overhead Camshaft",
+    TRUE ~ engine_2))
+    
+#Reescribir y eliminar
+car_sales <- select(car_sales, -engine_1)
+
+car_sales <- car_sales %>% 
+  rename(engine = engine_2)
+
+#tipo_fecha
+car_sales$date <- as.Date(car_sales$date, format = '%m/%d/%Y')
+```
+
+Llevé a cabo un proceso de limpieza de los nombres de las variables teniendo en cuenta buenas prácticas de codificación para mejores análisis.
+
+## **Análisis de Datos**
+
+### **annual_income**
+```{r, message=FALSE, echo=TRUE, warning=FALSE}
+#Resumen de variable "Ingresos Anuales"
+Desc(car_sales$annual_income, plotit = F)
+
+#Histograma annual_income
+mean_income <- mean(car_sales$annual_income)
+median_income <- median(car_sales$annual_income)
+
+ggplot(car_sales, aes(x = annual_income)) +
+  geom_histogram(
+    color = 'black',
+    fill = "#7ac28d") + 
+  labs(title = "Histograma de Ingresos Anuales", 
+       caption = "Elaboración propia", 
+       x = "Ingresos anuales en Dólares", 
+       y = "#Frecuencia") + 
+  scale_x_continuous(labels = label_number()) + 
+  theme_classic() + 
+  geom_vline(
+    aes(xintercept = mean_income),
+    color = "red",
+    linetype = "dashed",
+    size = 0.8) + 
+  annotate("text", x = mean_income, y = 10, 
+           label = paste("Media:", round(mean_income, 2)),
+           color = "red", size = 4, hjust = -0.2, vjust = -20) +
+  geom_vline(
+    aes(xintercept = median_income),
+    color = "blue",
+    linetype = "dashed",
+    size = 0.8) + 
+  annotate("text", x = median_income, y = 10, 
+           label = paste("Mediana:", round(median_income, 2)),
+           color = "blue", size = 4, hjust = -0.2, vjust = -15)
+```
+
+Se puede observar un gran sesgo hacia la derecha, lo que indica que la mayor 
+parte de los datos se concentran hacia la izquierda, es decir, valores bajos de ingresos anuales.
+
+EL valor de ingresos anuales que más predomina es de **US 13'500**, esto quiere
+decir que **5273 (22.1%)** personas obtienen esa cantidad de ingresos al año.
+
+A partir de las medidas descriptivas se puede observar que más del **50%** de estos 
+compradores ganan más de **US 735'000** al año y que **10%** de ellos ganan más de 
+**US 1'690'000** anuales. En promedio, estos compradores ganan **US 830'840**.
+
+### **price**
+```{r, message=FALSE, echo=TRUE, warning=FALSE}
+#Resumen de variable "Precio"
+Desc(car_sales$price, plotit = F)
+
+#Histograma price
+mean_price <- mean(car_sales$price)
+median_price <- median(car_sales$price)
+
+ggplot(car_sales, aes(x = price)) +
+  geom_histogram(
+    color = 'black',
+    fill = "#70a5fa") + 
+  labs(title = "Histograma de Precios", 
+       caption = "Elaboración propia", 
+       x = "Precio del vehículo en Dólares", 
+       y = "#Frecuencia") + 
+  scale_x_continuous(labels = label_number()) + 
+  theme_classic() + 
+  geom_vline(
+    aes(xintercept = mean_price),
+    color = "#1be02b",
+    linetype = "dashed",
+    size = 0.8) + 
+  annotate("text", 
+           x = mean_price, 
+           y = 10, 
+           label = paste("Media:", round(mean_price, 2)),
+           color = "#1be02b", 
+           size = 4, 
+           hjust = -0.1, 
+           vjust = -20) +
+  geom_vline(
+    aes(xintercept = median_price),
+    color = "black",
+    linetype = "dashed",
+    size = 0.8) + 
+  annotate("text", 
+           x = median_price, 
+           y = 10, 
+           label = paste("Mediana:", round(median_price, 2)),
+           color = "black", 
+           size = 4, 
+           hjust = 1.3, 
+           vjust = -25) + 
+  xlim(0,100000)
+```
+
+Con respecto a la variable de **Precios**, se puede observar igualmente un gran 
+sesgo hacia la derecha, lo que también indica que la mayor parte de los datos se 
+concentran hacia la izquierda, es decir, precios bajos de vehículos.
+
+A partir de las medidas descriptivas se puede observar: el auto más costosos cuesta **US 85'800** y el más econonómico cuesta **US 1'200**. Además que más del 50% de estos vehículos cuestan más de US 23'000 al año y que el **90%** de estos cuestan menos de **US 46'000**. En promedio los automóviles cuestan **US 28'090.25**
+
+### **ingresos_company**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.height=8, fig.width=13}
+ingresos <- car_sales %>% 
+  group_by(company) %>% 
+  summarise(ingresos_totales = sum(price))
+
+ingresos %>% 
+  ggplot(aes(x = reorder(company, ingresos_totales),
+             y = ingresos_totales,
+             fill = company,
+             label = ingresos_totales)) + 
+  geom_col(fill = "#25d994") + 
+  coord_flip() + 
+  theme(legend.position = "null") + 
+  labs(title = "Ingresos por compañia",
+       subtitle = "Periodo Enero 2022 - Diciembre 2023",
+       x = "Ingresos en Dólares",
+       y = "Compañias") + 
+  geom_text(position = position_stack(vjust = 1.4), color = "black") + 
+  ggeasy::easy_center_title()
+```
+
+Las empresas que más tuvieron ingresos durante el periodo Enero 2022 - Diciembre 2023 en referencia a algunos concesionarios de Estados Unidos  fueron fueron **Chevrolet**, **Ford** y  **Dodge**.
+
+### **gender**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+#barplot
+car_sales %>% 
+  ggplot(aes(x = gender, 
+             fill = gender)) + 
+  geom_bar() + 
+  geom_text(aes(label = ..count..), 
+            stat = "count", 
+            vjust = -1, 
+            colour = "black") + 
+  ylim(0,20000) + scale_fill_manual(values = c("Female" = "red", 
+                                               "Male" = "blue")) + 
+  labs(x = "Géneros",
+       y = "Cantidad",
+       title = "Diagrama de barras de Género",
+       caption = "Elaboración Propia",
+       subtitle = "Compradores de autos por género") + 
+  theme(legend.position = "null") + 
+  ggeasy::easy_center_title()
+```
+
+La mayoría de los compradores son de sexo **Masculino** con un total de **18'798** y el sexo **Femenino** tiene **5'108** compradores.
+
+### **boxplot_company**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.width=13, fig.height=7}
+#box_plot
+car_sales %>% 
+  ggplot(aes(x = company,
+             y = price,
+             fill = company)) + 
+  geom_boxplot() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 25, hjust = 1),
+        panel.background = element_rect(fill = "#fafafa")) +
+  labs(x = "Compañias",
+       y = "Precio en Dólares",
+       title = "Diagramas de caja",
+       caption = "Elaboración Propia") + 
+  ggeasy::easy_center_title()
+```
+
+Los autos más costosos que se vendieron durante el periodo **Audi**, **Cadillac**, **Chevrolet**, **Lincoln**, **Mercedes Benz**, **Toyota** y **Volvo**.
+
+Los autos más económicos los tienen las compañías: **Ford**, **Lincoln** y **Mercedes Benz**.
+
+### **boxplot, gender - price**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+car_sales %>% 
+  ggplot(aes(x = gender,
+             y = price, 
+             fill = gender)) + geom_boxplot() + 
+  labs(y = "Precio",
+       x = "Género",
+       title = "Boxplot de precios de autos por Género",
+       caption = "Elaboración Propia",
+       subtitle = "Precio de autos por género") + 
+  theme(legend.position = "null") + 
+  ggeasy::easy_center_title() + 
+  scale_fill_manual(values = c("Female" = "red", 
+                                               "Male" = "blue"))
+```
+
+A pesar de que la mayoría de los compradores son de género másculino, gráficamente no se nota diferencia alguna entre los precios de los vehículos que compran ambos géneros.
+
+### **barplot_company**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.width=13}
+#barplot
+car_sales %>%
+  group_by(company) %>%
+  count(name = "total") %>%
+  ggplot(
+    aes(x = reorder(company, total),
+        y = total,
+        fill = company,
+        label = total)) +
+  geom_col() +
+  labs(y = "Total",
+       x = "Compañía",
+       title = "#Frecuencia de autos vendidos por compañía",
+       caption = "Elaboración Propia") + 
+  ggeasy::easy_center_title() +
+  theme(legend.position = "null",
+        axis.text.x = element_text(angle = 25, hjust = 1),
+        panel.background = element_rect(fill = "white")) + 
+  geom_text(position = position_stack(vjust = 1.1), color = "black")
+```
+
+En la gráfica de barras podemos observar que que la compañia de autos que más 
+vendió durante ese periodo fue **Chevrolet**, con **1819** autos vendidos, seguido 
+de **Dodge** con **1671**, por **Ford** con **1614** y así con las demás compañias.
+La compañia que menos autos vendió durante el periodo fue **Jaguar** con **180** vehículos vendidos.
+
+La compañia extranjera (que no es de Estados Unidos) que más vendió fue
+**Volkswagen** con **1333** ubicándose en la **4°** posición de las 
+compañias que más autos vendieron.
+
+### **most_expensive_models**
+```{r message=FALSE, warning=FALSE, echo=TRUE}
+#most_value
+most_value <- car_sales %>% 
+  filter(price > 70000)
+
+#df
+most_expensive_models <- most_value %>% 
+  group_by(company) %>% 
+  summarise(model = unique(model), 
+            valor = max(price)) %>% 
+  arrange(desc(valor)) %>% 
+  unite("cars","company","model", sep = "_") %>% 
+  data.frame()
+
+#barplot
+most_expensive_models %>% 
+  ggplot(aes(x = reorder(cars,valor),
+             y = valor,
+             label = valor,
+             fill = cars)) + 
+  geom_col() + 
+  theme(legend.position = "null") + 
+  ylim(0,100000) + coord_flip() + 
+  labs(x = "Precio en Dólares",
+       y = "Modelos",
+       title = "Modelos más costosos",
+       caption = "Elaboración Propia") + 
+  geom_text(position = position_stack(vjust = 1.1), color = "black")
+```
+
+Los autos más costosos los tiene la compañía **Cadillac** con sus modelos **Eldorado** y **Catera** que cuestan cada uno **US 85'800**. Luego le sigue **Toyota** con sus modelos **Tacoma** y **RAV4** con valores de **US 85'600**. Más abajo está el **Audi A6** con un valor de **US 85'500** y luego le siguen los **Mercedes** **SLK230** y **S-Class** con un valor de **US 85'250** cada uno.
+
+### **engine, transmision, color**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.width=13}
+#barplot engine
+bar_engine <- ggplot(car_sales,
+                     aes(x = engine,
+                         fill = engine)) +
+  geom_bar() +
+  scale_fill_manual(values = c(
+    "Double Overhead Camshaft" = "#D9534F",
+    "Overhead Camshaft" = "#67B249"
+  )) +
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "#d0d0d0")) +
+  geom_text(
+    aes(label = ..count..),
+    stat = "count",
+    vjust = -1,
+    colour = "black"
+  ) +
+  ylim(0, 15000)
+
+#barplot transmission
+bar_transmission <- ggplot(car_sales,
+                           aes(x = transmission,
+                               fill = transmission)) +
+  geom_bar() +
+  scale_fill_manual(values = c("Auto" = "#F1AC4C",
+                               "Manual" = "#4A81B6")) +
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "#d0d0d0")) +
+  geom_text(
+    aes(label = ..count..),
+    stat = "count",
+    vjust = -1,
+    colour = "black"
+  ) +
+  ylim(0, 15000)
+
+#barplot color
+bar_color <- ggplot(car_sales,
+                    aes(x = color,
+                        fill = color)) +
+  geom_bar() +
+  scale_fill_manual(values = c(
+    "Black" = "black",
+    "Pale White" = "#f6f6f6",
+    "Red" = "red"
+  )) +
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "#d0d0d0")) +
+  geom_text(
+    aes(label = ..count..),
+    stat = "count",
+    vjust = -1,
+    colour = "black"
+  ) +
+  ylim(0,15000)
+
+#grid
+grid.arrange(bar_engine, bar_transmission, bar_color, nrow = 1)
+```
+
+En el conjunto de datos, los autos tienen **2** tipos de motores, los **Double Overhead Camshaft** presentes en **12’571** vehículos y los **Overhead Camshaft** presentes en  **11’335** .
+Tenemos 2 tipos de transmisiones, los vehículos **Automáticos** y los **Manuales**, los cuales son **12’571** y **11’335** respectivamente-
+En el caso de los colores, tenemos 3 tipos de colores dentro del conjunto de datos, los **7’857** vehículos **Black**, los **11’256** autos de color **Pale White** y el resto de color **Red**, que corresponden a **4’793**.
+
+### **body_style**
+```{r, warning=FALSE, message=FALSE, echo=TRUE}
+#barplot body_style
+car_sales %>%
+  group_by(body_style) %>%
+  count(name = "total") %>%
+  ggplot(aes(
+    x = reorder(body_style, total),
+    y = total,
+    fill = body_style,
+    label = total
+  )) +
+  geom_col() +
+  labs(
+    x = "Total",
+    y = "Cantidad",
+    title = "Tipo de Carrocería",
+    caption = "Elaboración Propia"
+  ) +
+  theme(legend.position = "none",
+        panel.background = element_rect(fill = "white")) +
+  geom_text(position = position_stack(vjust = 1.15), color = "black") +
+  coord_flip() +
+  scale_fill_viridis_d() +
+  ggeasy::easy_center_title()
+```
+
+En el caso el tipo de carrocería, los compradores prefieren el **SUV** (Todoterreno ligero) y el **Hatchback** (vehículo de cabina con ventana) ya que se vendieron **6’374** y **6’128** autos respectivamente, seguido de los autos tipo **Sedan**, de los cuales se vendieron **4’488**, luego los tipo **Passenger** con **3’945** autos vendidos y por último los vehículos tipo **Hardtop** (vehículos descapotables) con **2’971** unidades vendidas.
+
+### **dealer_region**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+#Gráfico Circular
+car_sales %>%
+  group_by(dealer_region) %>%
+  count(name = "total") %>%
+  ggplot(aes(
+    x = reorder(dealer_region, total),
+    y = total,
+    fill = dealer_region,
+    label = total,
+  )) +
+  geom_col() +
+  geom_text(position = position_stack(vjust = 1.1),
+            color = "black") + ylim(0, 5000) +
+  theme(legend.position = "none",
+        panel.background = element_rect(fill = "white")) +
+  labs(
+    title = "Barplot de Regiones de distribuidoras",
+    x = "Regiones",
+    y = "#Frecuencia",
+    caption = "Elaboración propia"
+  ) +
+  ggeasy::easy_center_title() + 
+  coord_flip()+ scale_fill_manual(values = c(
+    "Austin" = "#D4AC0D",
+    "Janesville" = "#F1C40F",
+    "Scottsdale" = "#F4D03F",
+    "Pasco" = "#F7DC6F",
+    "Aurora" = "#F9E79F",
+    "Middletown" = "#FCF3CF",
+    "Greenville" = "#FEF9E7"
+  ))
+```
+
+De acuerdo a la información de las regiones donde están ubicadas las  Concesionarias de los vehículos las regiones de **Pasco**, **Aurora**, **Middletown** y **Greenville** tienen números de autos vendidos similares, con **3’131**, **3’130**, **3’128** y **3’128** respectivamente. En tercer puesto está la región de **Scottsdale** con **3’433** autos vendidos. En segundo lugar está **Janesville** con **3’821** y en primer lugar como la región en donde más se vendieron autos fue **Austin** con un total de **4’135** autos vendidos.
+
+### **dealer_name**
+```{r warning=FALSE, message=FALSE, echo=TRUE, fig.width=13, fig.height=8}
+#barplot
+car_sales %>%
+  group_by(dealer_name) %>%
+  count(name = "total") %>%
+  ggplot(
+    aes(x = reorder(dealer_name, total),
+        y = total,
+        fill = dealer_name,
+        label = total)) +
+  geom_col() +
+  labs(x = "Total",
+       y = "Frecuencia",
+       title = "Cantidad de Autos vendidos por Distribuidora",
+       caption = "Elaboracion Propia") + 
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "white")) + 
+  geom_text(position = position_stack(vjust = 1.2), color = "black") + 
+  coord_flip() + 
+  ggeasy::easy_center_title() + 
+  scale_fill_viridis_d()
+```
+
+En el gráfico podemos observar que 10 concesionarias tienen en promedio 
+**1'261,7** de la cual la concesionaria que más autos vendió durante el
+periodo fue **Progressive Shippers Cooperative Association No** con un total de 
+**1'318**. Las otras 18 concesionarias vendieron en promedio **627,17**.
+La concesionaria que menos autos vendió fue **Classic Chevy**.
+
+### **price vs annual_income**
+```{r}
+#Scatter_plot
+ggplot(car_sales, aes(y = price, x = annual_income)) + 
+  geom_point(size = .5, color = "blue") + 
+  scale_x_continuous(labels = label_number()) + 
+  labs(x = "Ingresos anuales",
+       y = "Precio de venta",
+       title = "Precio de venta vs Ingresos anuales",
+       caption = "Elaboración Propia") + 
+  ggeasy::easy_center_title() + 
+  theme(panel.background = element_rect(fill = "white"))
+
+#correlation_coefficient
+cor.test(x = car_sales$annual_income, 
+         y = car_sales$price, 
+         data = car_sales,
+         method = "pearson")
+```
+
+A partir del diagrama de dispersión se puede notar que NO existe una correlación entre el precio del vehículo que se adquiere y los ingresos anuales de esa persona. Al realizar el test de correlación lineal, este nos arroja un valor cercano a cero, lo que nos indica que la correlación que existe entre esas dos variables es casi nula.
+
+### **best_selling_models**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+#new_df
+model <- car_sales %>% 
+  select(company,model)
+
+#conteo_por_modelo
+model <- model %>% 
+  group_by(company, model) %>% 
+  tally()
+model <- model %>% 
+  arrange(desc(n))
+model <- data.frame(model)
+
+#modelos_mas_vendidos
+model_most <- model %>% 
+  filter(n >= 300)
+
+#Unir columnas
+model_most <- model_most %>% 
+  unite("vehicle", "company", "model", sep = "_")
+
+#Barplot
+model_most %>% 
+  ggplot(aes(x = reorder(vehicle, n),
+             y = n,
+             fill = vehicle,
+             label = n)) + 
+  geom_col() + 
+  coord_flip() + 
+  theme(legend.position = "none",
+        panel.background = element_rect(fill = "white")) + 
+  geom_text(position = position_stack(vjust = 1.1), 
+            color = "black") + 
+  scale_fill_viridis_d() + 
+  labs(x = "Frecuencia",
+       y = "Modelos",
+       title = "Modelos más vendidos",
+       caption = "Elaboración Propia") + 
+  ggeasy::easy_center_title()
+```
+
+El modelo que más se vendió fue el **Mitsubishi Diamante** con un total de **418** unidades, luego le sigue el **Chevrolet Prizm** y el **Oldsmobile Silhouette** con **411** cada uno.
+
+### **number_of_models**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.height=8}
+#otro_df
+nmodel <- model
+
+#df_cantidad_modelos
+nmodel <- data.frame(table(nmodel$company))
+nmodel <- nmodel %>% 
+  rename(company = Var1,
+         n = Freq)
+
+#convertir_factor_str
+nmodel$company <- as.character(nmodel$company)
+str(nmodel)
+
+#barplot_cantidad_modelos
+ggplot(nmodel, aes(
+  x = reorder(company, n),
+  y = n,
+  label = n
+)) +
+  geom_col(fill = "#FDE722") +
+  coord_flip() +
+  labs(
+    x = "Cantidad",
+    y = "Campañia",
+    title = "Barplot cantidad de modelos por compañia",
+    caption = "Elaboración propia"
+  ) +
+  ggeasy::easy_center_title() +
+  theme(panel.background = element_rect(fill = "white")) +
+  geom_text(position = position_stack(vjust = 1.04), color = "black")
+```
+
+Podemos observar que Las compañias que más modelos tienen en este conjunto de
+datos son **Ford** y **Dodge** con **11** modelos diferentes cada una. Luego le siguen 
+**Toyota**, **Mercendes Benz** y **Chevrolet** con **9** modelos cada una.
+
+### **number_models_vs_number_sold**
+```{r message=FALSE, echo=TRUE, warning=FALSE, fig.height=8}
+#autos_vendidos_por_compañia
+nsale <- data.frame(table(car_sales$company))
+
+#unir_df
+nsale_ncompany <- bind_cols(nsale, nmodel)
+
+#eliminar_variable
+nsale_ncompany <- nsale_ncompany %>% 
+  select(-Var1)
+
+#renombrar 
+nsale_ncompany <- nsale_ncompany %>% 
+  rename(numero_modelos = n,
+         autos_vendidos = Freq)
+
+#correlation_test
+cor.test(x = nsale_ncompany$numero_modelos,
+         y= nsale_ncompany$autos_vendidos,
+         data = nsale_ncompany)
+
+#highcharter
+hchart(
+  nsale_ncompany,
+  "scatter",
+  hcaes(x = numero_modelos, y = autos_vendidos),
+  regression = TRUE
+  ) %>% 
+  hc_add_dependency("plugins/highcharts-regression.js") %>% 
+   hc_title(text = "<b>Gráfico de dispersion</b>") |>
+  hc_subtitle(text 
+              = "<i>Cantidad de modelos vs cantidad de autos vendidos</i>")
+```
+
+Al realizar el gráfico de dispersión para ver si existe una relación entre la
+cantidad de modelos que ofrece una compañia y el número de autos vendidos durante
+el periodo, podemos notar como estos siguen un patrón ascendente.
+Al realizar el test de correlación de Pearson este nos arroja que si 
+existe una correlación positva bastante fuerte entre estas dos variable y el test de
+hipótesis lo confirma, lo que nos da indicios que a mayor número de modelos tenga 
+la compañia para ofrecer, más autos venderá y esto tiene cierta lógica ya que 
+si consideramos que esta diversidad de modelos corresponde a los diferentes niveles
+ingreso de las personas, entonces exisitrá un modelo para diferentes tipos de ingresos.
+
+### **cars_solds_per_day**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+#Agrupando_cantidad
+serie_tiempo  = car_sales %>%
+  group_by(date)%>%
+  summarise(Cantidad = n())
+
+#gráfico
+highchart(type = "stock") %>%
+    hc_add_series(serie_tiempo, type = "line", 
+                  hcaes(x = serie_tiempo$date, 
+                        y = serie_tiempo$Cantidad), 
+                  name = "cantidad") %>% 
+  hc_xAxis(type = 'character', labels = list(format = '{value:%Y-%B-%d}'))
+    
+```
+
+La serie de tiempo nos muestra el patrón de ventas de autos cada dia durante el periodo **2 de Junio de 2022** y **31 de Diciembre de 2023**, en donde el día donde más se vendió autos fue el **5 de Septiembre de 2023** con un total de 190 autos.
+
+### **time_serie**
+```{r message=FALSE, echo=TRUE, warning=FALSE}
+#new_df
+car_sales_2 <- car_sales 
+
+#asignando_fechas
+car_sales_2 <- car_sales_2 %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         date = as.Date(format(date, "%Y-%m-01")))
+
+#agrupando
+time_serie <- car_sales_2 %>% 
+  group_by(date) %>% 
+  summarise(Cantidad = n())
+
+#gráfico
+highchart(type = "stock") %>%
+    hc_add_series(time_serie, type = "line", 
+                  hcaes(x = time_serie$date, 
+                        y = time_serie$Cantidad), 
+                  name = "cantidad") %>% 
+  hc_xAxis(type = 'character', labels = list(format = '{value:%Y-%B-%d}')) %>% 
+  hc_title(text = "Ventas mensuales") %>% 
+  hc_subtitle(text = "Periodo Enero 2022 - Diciembre 2023")
+```
+
+Se puede observar cierto patrón característico donde en los primeros meses del año, las ventas son bajas, y van subiendo al pasar al segundo trimestre. Luego existe un pico de ventas en el mes de septiembre luego de eso se experimenta una caida notoria de las ventas en el mes de octubre, pero nuevamente estas ventas suben en el mes de noviembre y tienen su pico máximo en diciembre.
+
+### **most_expensive_cars**
+```{r, message=FALSE, echo=TRUE, warning=FALSE, fig.width=10}
+#grafico
+most_value %>%
+  group_by(company) %>%
+  count(name = "total") %>%
+  ggplot(
+    aes(x = reorder(company, total),
+        y = total,
+        fill = company,
+        label = total)) +
+  geom_col() +
+  labs(y = "Total",
+       x = "Compañía",
+       title = "Frecuencia de autos vendidos por compañía",
+       caption = "Elaboración Propia",
+       subtitle = "Autos más costosos") + 
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "white")) + 
+  geom_text(position = position_stack(vjust = 1.1), color = "black") + 
+  coord_flip()
+```
+
+En el gráfico de barras se puede observar que la marca de autos más costosos (por encima de los **US 70’000**) más vendidos es **Plymouth** con **88** autos, luego le sigue **Cadillac** con **82** y en 3° lugar está **Mercedes Benz** con **72** autos.
+
+### **cheaper_cars**
+```{r, message=FALSE, echo=TRUE, warning=FALSE, fig.height=8, fig.width=10}
+#fliter_cars
+cheap_value <- car_sales %>% 
+  filter(price < 14000)
+
+#grafico
+cheap_value %>%
+  group_by(company) %>%
+  count(name = "total") %>%
+  ggplot(
+    aes(x = reorder(company, total),
+        y = total,
+        fill = company,
+        label = total)) +
+  geom_col() +
+  labs(y = "Total",
+       x = "Compañía",
+       title = "Frecuencia de autos vendidos por compañía",
+       caption = "Elaboración Propia",
+       subtitle = "Autos más económicos") + 
+  theme(legend.position = "null",
+        panel.background = element_rect(fill = "white")) + 
+  geom_text(position = position_stack(vjust = 1.1), color = "black") + 
+  coord_flip()
+```
+
+Analizando el gráfico de los autos más económicos (menos de **US 14’000**) se puede observar que la compañía que más ventas de estos autos realiza es **Ford** con **197** autos, seguido de **Volkswagen** y **Chevrolet** con **176** autos vendidos cada uno. Más abajo aparecen **Nissan** con **129** y **Dodge** y **Audi** con **128** cada uno.
+
+## **Conclusiones**
+
+- La compañía que más autos vende e ingresos tiene es **Chevrolet**
+- En promedio, los ingresos anuales de los compradores de autos son de **US 830’840**
+- En promedio, el valor de los autos vendidos es de **US 28’090**
+- El **78,6%** de los compradores son de género **Masculino**
+- Los **hombres** y las **mujeres** compran autos en precios similares
+- Los tipos de motores venden en cantidades similares al igual que la transmisión del vehículo
+- El color favorito de los compradores es **Pale White**
+- Las carrocerías favoritas son **SUV (Todoterrenos ligero)** y **Hatchback (vehículo de cabina con ventana)** 
+- Las regiones con más ventas fueron **Austin** y **Janesville**
+- Las concesionarias que más vendieron fueron **Progressive Shippers Cooperative Association No** y **Rabun Used Car Sales**
+- El modelo que más se vendió fue el **Mitsubishi Diamante** luego le siguen el **Chevrolet Prizm** y el **Oldsmobile Silhouette**
+- Las compañías con más modelos son **Ford** y **Dodge** 
+- Se observa una correlación entre el **número de autos vendidos** y la **cantidad de modelos** que indica que a mayor cantidad de modelos existe una mayor cantidad de ventas (Nota: solo es una fuerte correlación, más no causalidad)
+- El día que más autos se vendieron fue el **5 de Septiembre de 2023**
+- Los meses donde más se vendieron autos fueron en **Septiembre**, **Noviembre** y **Diciembre**
+- Las compañías que más autos de más de **US 70’000** vendieron fueron **Plymouth** y **Cadillac**
+- Las compañías que más autos de menos de **US 14’000** vendieron fueron **Ford**, **Volkswagen** y **Chevrolet**
